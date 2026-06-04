@@ -1,0 +1,71 @@
+{
+  "name": "content-looper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:api": "tsx watch server/index.ts",
+    "app:dev": "concurrently -k -n api,web,app -c cyan,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"wait-on http://127.0.0.1:5173 http://127.0.0.1:8787/api/health && CONTENTDECK_ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",
+    "app:build:server": "tsc -p tsconfig.server.json",
+    "app:pack": "npm run build && npm run app:build:server && electron-builder --mac dir",
+    "app:dmg": "npm run build && npm run app:build:server && electron-builder --mac dmg",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "build": {
+    "appId": "local.contentdeck.app",
+    "productName": "ContentDeck",
+    "directories": {
+      "output": "dist-mac"
+    },
+    "files": [
+      "dist/**",
+      "dist-server/**",
+      "electron/**",
+      "bin/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        "dir"
+      ]
+    }
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "fastify": "^5.8.5",
+    "lucide-react": "^1.16.0",
+    "motion": "^12.39.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^9.2.1",
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13",
+    "wait-on": "^9.0.10"
+  }
+}

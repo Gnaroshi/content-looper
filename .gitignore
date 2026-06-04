@@ -1,0 +1,37 @@
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-server/
+dist-mac/
+release/
+out/
+
+# Local Python/runtime environments
+.venv/
+venv/
+__pycache__/
+
+# Local app/runtime assets
+bin/*
+!bin/
+!bin/README.md
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+.tmp/
+tmp/
+
+# Editor/local machine files
+.idea/
+.vscode/
+*.swp
+*.swo
