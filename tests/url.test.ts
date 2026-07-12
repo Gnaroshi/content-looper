@@ -51,7 +51,23 @@ describe("ContentDeck provider detection baseline", () => {
   });
 
   it("rejects malformed and unsupported provider URLs", () => {
-    for (const value of ["", "not a URL", "https://example.com/video", "https://x.com/example", "https://youtube.com/watch"]) {
+    for (const value of [
+      "",
+      "not a URL",
+      "https://example.com/video",
+      "https://x.com/example",
+      "https://youtube.com/watch",
+      "http://youtube.com/watch?v=abc",
+      "javascript:alert(1)",
+      "file:///tmp/video.mp4",
+      "data:text/html,hello",
+      "contentdeck://open?url=https://youtube.com/watch?v=abc",
+      "https://youtube.com.evil.example/watch?v=abc",
+      "https://tiktok.com.evil.example/@user/video/123",
+      "https://user:password@youtube.com/watch?v=abc",
+      "https://youtube.com:8443/watch?v=abc",
+      "https://www.tiktok.com/",
+    ]) {
       assert.equal(parseVideoUrl(value), null);
     }
   });

@@ -251,8 +251,8 @@ export function App() {
     async function loadLearningConfig() {
       try {
         const [configResponse, registryResponse] = await Promise.all([
-          fetch(getApiUrl("/api/learning/config")),
-          fetch(getApiUrl("/api/models/registry")),
+          apiFetch("/api/learning/config"),
+          apiFetch("/api/models/registry"),
         ]);
         const configPayload = (await configResponse.json()) as { config?: HardwareConfig; recommendations?: ModelRecommendation };
         const registryPayload = (await registryResponse.json()) as { models?: ModelRegistryItem[] };
@@ -632,7 +632,7 @@ export function App() {
       try {
         const abortController = new AbortController();
         resolveAbortRef.current = abortController;
-        const response = await fetch(getApiUrl("/api/resolve"), {
+        const response = await apiFetch("/api/resolve", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1169,7 +1169,7 @@ export function App() {
     setRevealedQuiz({});
 
     try {
-      const response = await fetch(getApiUrl("/api/learning/analyze"), {
+      const response = await apiFetch("/api/learning/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: targetUrl, sourceLanguage: learningSourceLanguage }),
@@ -1191,7 +1191,7 @@ export function App() {
     setModelStatus("로컬 AI 설정을 저장하는 중입니다.");
 
     try {
-      const response = await fetch(getApiUrl("/api/learning/config"), {
+      const response = await apiFetch("/api/learning/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(hardwareConfig),
@@ -1209,7 +1209,7 @@ export function App() {
     setModelStatus("최신 모델 목록을 확인하는 중입니다.");
 
     try {
-      const response = await fetch(getApiUrl("/api/models/live"));
+      const response = await apiFetch("/api/models/live");
       const payload = (await response.json()) as { error?: string; models?: ModelRegistryItem[] };
       if (!response.ok || payload.error) throw new Error(payload.error || "모델 목록을 갱신하지 못했습니다.");
       setModelRegistry(payload.models ?? []);
@@ -1224,7 +1224,7 @@ export function App() {
     setModelStatus(`${model.id} 설치를 시작합니다.`);
 
     try {
-      const response = await fetch(getApiUrl("/api/models/install"), {
+      const response = await apiFetch("/api/models/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ runtime: model.runtime, model: model.id }),
@@ -2344,6 +2344,10 @@ function getApiUrl(path: string): string {
   }
 
   return path;
+}
+
+function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(getApiUrl(path), init);
 }
 
 function readHistory(): HistoryEntry[] {
