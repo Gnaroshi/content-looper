@@ -2,6 +2,7 @@ const { app, BrowserWindow, shell } = require("electron");
 const { randomBytes } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const path = require("node:path");
+const { parseContentDeckDeepLink } = require("./deep-link.cjs");
 const {
   isSafeDevelopmentServerUrl,
   isSafeExternalHttpsUrl,
@@ -16,6 +17,24 @@ if (isDev && !isSafeDevelopmentServerUrl(developmentServerUrl)) {
 const apiPort = process.env.CONTENTDECK_API_PORT || (isDev ? "8787" : "18787");
 const apiToken = isDev ? "" : randomBytes(32).toString("hex");
 let mainWindow = null;
+let pendingOpenRequest = process.argv.map(parseContentDeckDeepLink).find(Boolean) || null;
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  receiveDeepLink(url);
+});
+
+app.on("second-instance", (_event, argv) => {
+  const url = argv.find((argument) => argument.startsWith("contentdeck://"));
+  if (url) receiveDeepLink(url);
+  mainWindow?.show();
+  mainWindow?.focus();
+});
 
 async function startBundledApi() {
   if (isDev) return `http://127.0.0.1:${apiPort}`;
@@ -40,6 +59,7 @@ function createWindow(apiBase) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
@@ -91,12 +111,24 @@ function createWindow(apiBase) {
     callback(false);
   });
 
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (pendingOpenRequest) {
+      mainWindow.webContents.send("contentdeck:open-request", pendingOpenRequest);
+      pendingOpenRequest = null;
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
 
 app.whenReady().then(async () => {
+  if (process.defaultApp && process.argv[1]) {
+    app.setAsDefaultProtocolClient("contentdeck", process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient("contentdeck");
+  }
   let apiBase = `http://127.0.0.1:${apiPort}`;
 
   try {
@@ -113,6 +145,18 @@ app.whenReady().then(async () => {
     }
   });
 });
+
+function receiveDeepLink(value) {
+  const request = parseContentDeckDeepLink(value);
+  if (!request) return;
+  if (mainWindow && !mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.send("contentdeck:open-request", request);
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  pendingOpenRequest = request;
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

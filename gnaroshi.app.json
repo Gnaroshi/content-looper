@@ -29,7 +29,12 @@
       "healthSubcommand": ["status", "--json"]
     },
     "localHttp": {},
-    "deepLinks": []
+    "deepLinks": [
+      {
+        "scheme": "contentdeck",
+        "routes": ["/open", "/session"]
+      }
+    ]
   },
   "health": { "timeoutMs": 2000 },
   "icon": { "kind": "none" },

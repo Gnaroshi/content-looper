@@ -850,6 +850,29 @@ export function App() {
   );
 
   useEffect(() => {
+    return window.contentDeckIntegration?.onOpenRequest((request) => {
+      if (request.kind === "open") {
+        setUrl(request.url);
+        loadUrl(request.url);
+        return;
+      }
+
+      void Promise.all(
+        historyRef.current.map(async (entry) => ({ entry, sessionId: await createSessionId(entry.key) })),
+      ).then((sessions) => {
+        const match = sessions.find((session) => session.sessionId === request.sessionId);
+        if (!match) {
+          setError("요청한 최근 세션을 이 ContentDeck 저장소에서 찾지 못했습니다.");
+          setMessage("");
+          return;
+        }
+        setUrl(match.entry.url);
+        loadUrl(match.entry.url);
+      });
+    });
+  }, [loadUrl]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sharedUrl = params.get("url");
     if (!sharedUrl) return;

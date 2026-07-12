@@ -22,6 +22,12 @@
   "build": {
     "appId": "local.contentdeck.app",
     "productName": "ContentDeck",
+    "protocols": [
+      {
+        "name": "ContentDeck media handoff",
+        "schemes": ["contentdeck"]
+      }
+    ],
     "directories": {
       "output": "dist-mac"
     },
