@@ -271,6 +271,10 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    void mirrorRecentSessions(history);
+  }, [history]);
+
   const persistHistory = useCallback((updater: (items: HistoryEntry[]) => HistoryEntry[]) => {
     setHistory((items) => {
       const nextItems = updater(items).slice(0, maxHistoryItems);
@@ -2374,6 +2378,33 @@ function writeHistory(items: HistoryEntry[]) {
   } catch {
     // Storage can be unavailable in locked-down browser contexts.
   }
+}
+
+async function mirrorRecentSessions(items: HistoryEntry[]): Promise<void> {
+  if (!("crypto" in window) || !window.crypto.subtle) return;
+  try {
+    const sessions = await Promise.all(
+      items.slice(0, maxHistoryItems).map(async (entry) => ({
+        sessionId: await createSessionId(entry.key),
+        provider: entry.platform,
+        updatedAt: entry.updatedAt,
+        loopMode: entry.segment.enabled && entry.segment.end > entry.segment.start ? "segment" : "full",
+      })),
+    );
+    await apiFetch("/api/integration/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessions }),
+    });
+  } catch {
+    // The mirror is derived integration state; playback history remains canonical in localStorage.
+  }
+}
+
+async function createSessionId(key: string): Promise<string> {
+  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `session_${hex.slice(0, 24)}`;
 }
 
 function normalizeHistoryEntry(value: unknown): HistoryEntry | null {

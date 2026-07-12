@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import Fastify from "fastify";
 import { z } from "zod";
 import { isSupportedMediaUrl } from "../src/url.js";
+import { recentSessionInputSchema, writeRecentSessionMirror } from "./integration.js";
 import { isAllowedBrowserOrigin, isAuthorizedRequest, safeHttpsUrl } from "./security.js";
 
 const execFileAsync = promisify(execFile);
@@ -146,6 +147,15 @@ app.get("/api/health", async () => ({
   ok: true,
   resolverAvailable: Boolean(await findYtDlp().catch(() => null)),
 }));
+
+app.post("/api/integration/sessions", async (request, reply) => {
+  const body = recentSessionInputSchema.safeParse(request.body);
+  if (!body.success) {
+    return reply.code(400).send({ error: "Recent session summary is invalid." });
+  }
+  await writeRecentSessionMirror(body.data);
+  return { ok: true, count: body.data.sessions.length };
+});
 
 app.post("/api/resolve", async (request, reply) => {
   const body = requestSchema.safeParse(request.body);

@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "main": "electron/main.cjs",
+  "bin": {
+    "contentdeck": "bin/contentdeck.mjs"
+  },
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:web": "vite --host 127.0.0.1",
@@ -27,6 +30,8 @@
       "dist-server/**",
       "electron/**",
       "bin/**",
+      "integration/**",
+      "gnaroshi.app.json",
       "package.json"
     ],
     "extraResources": [
@@ -36,6 +41,17 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "integration",
+        "to": "integration",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "gnaroshi.app.json",
+        "to": "gnaroshi.app.json"
       }
     ],
     "mac": {

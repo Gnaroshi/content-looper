@@ -19,6 +19,7 @@ __pycache__/
 bin/*
 !bin/
 !bin/README.md
+!bin/contentdeck.mjs
 
 # Logs and temporary files
 *.log
