@@ -27,6 +27,7 @@ npm run dev
 npm run dev
 npm run build
 npm run preview
+npm test
 ```
 
 ## macOS Local App
@@ -56,3 +57,21 @@ dist-mac/mac-arm64/ContentDeck.app
 - YouTube: `youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/shorts/...`, `youtube.com/embed/...`, `youtube.com/live/...`
 - X: `x.com/{user}/status/{id}`, `twitter.com/{user}/status/{id}`
 - TikTok: `tiktok.com/@{user}/video/{id}`, `vm.tiktok.com/...`, `vt.tiktok.com/...`
+
+외부 미디어 입력은 HTTPS만 허용합니다.
+
+## Studio integration
+
+ContentDeck는 독립 실행 앱이며 재생, 자막, 루프, 기록의 소유권을 유지합니다. Studio는 `gnaroshi.app.json`과 아래의 읽기 전용 명령을 통해 설치 상태와 비민감 요약만 확인합니다.
+
+```sh
+contentdeck status --json
+contentdeck sessions recent --json --limit 10
+contentdeck --version
+```
+
+패키지된 앱은 manifest와 CLI contract module을 `Contents/Resources/`에도 함께 배포합니다. 시스템 Node.js가 있는 로컬 환경에서는 `Contents/Resources/bin/contentdeck.mjs`를 고정 CLI entrypoint로 사용할 수 있습니다.
+
+미디어 전달은 `contentdeck://open?url=<encoded-https-url>`, 최근 세션 재개는 `contentdeck://session/<opaque-id>`를 사용합니다. Studio는 ContentDeck의 localStorage, 설정 파일, Fastify API에 직접 접근하지 않습니다.
+
+저장소 및 integration ID는 `content-looper`, 제품 표시 이름은 `ContentDeck`입니다. 저장소 이름 변경은 링크와 릴리스 호환성을 검토한 뒤 소유자가 별도로 결정합니다.
