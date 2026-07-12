@@ -13,7 +13,8 @@
     "app:pack": "npm run build && npm run app:build:server && electron-builder --mac dir",
     "app:dmg": "npm run build && npm run app:build:server && electron-builder --mac dmg",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "tsx --test tests/*.test.ts"
   },
   "build": {
     "appId": "local.contentdeck.app",
