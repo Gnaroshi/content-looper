@@ -1,0 +1,47 @@
+name: Release ContentDeck
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p actions "$RUNNER_TEMP/release.keychain-db"
+          security unlock-keychain -p actions "$RUNNER_TEMP/release.keychain-db"
+          security import "$RUNNER_TEMP/developer-id.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/release.keychain-db"
+          security list-keychain -d user -s "$RUNNER_TEMP/release.keychain-db" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions "$RUNNER_TEMP/release.keychain-db"
+      - name: Configure notarization
+        run: xcrun notarytool store-credentials contentdeck-actions --apple-id "${{ secrets.APPLE_ID }}" --team-id "${{ secrets.APPLE_TEAM_ID }}" --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}"
+      - name: Test and package
+        env:
+          CONTENTDECK_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          NOTARY_PROFILE: contentdeck-actions
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          test -z "$(git status --porcelain)"
+          npm ci
+          npm test
+          npm run app:dmg
+          cp gnaroshi.app.json dist-mac/gnaroshi.app.json
+          (cd dist-mac && shasum -a 256 *.zip *.dmg gnaroshi.app.json > SHA256SUMS)
+      - name: Publish release and updater metadata
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release create "$GITHUB_REF_NAME" dist-mac/*.zip dist-mac/*.dmg dist-mac/latest-mac.yml dist-mac/gnaroshi.app.json dist-mac/SHA256SUMS --generate-notes --verify-tag

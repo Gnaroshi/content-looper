@@ -8,6 +8,8 @@ dist/
 dist-server/
 dist-mac/
 release/
+.release/
+integration/build-provenance.json
 out/
 
 # Local Python/runtime environments

@@ -1,4 +1,5 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, dialog, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { randomBytes } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const path = require("node:path");
@@ -138,6 +139,7 @@ app.whenReady().then(async () => {
   }
 
   createWindow(apiBase);
+  configureUpdates();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -145,6 +147,40 @@ app.whenReady().then(async () => {
     }
   });
 });
+
+function configureUpdates() {
+  if (!app.isPackaged || isDev) return;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("update-available", async (info) => {
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "ContentDeck update available",
+      message: `ContentDeck ${info.version} is available.`,
+      detail: "Download the signed GitHub release now? Playback remains available while the update downloads.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice.response === 0) void autoUpdater.downloadUpdate();
+  });
+  autoUpdater.on("update-downloaded", async () => {
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "ContentDeck update ready",
+      message: "The signed update is ready to install.",
+      detail: "Restart ContentDeck now or install it when the app quits.",
+      buttons: ["Restart and install", "Install on quit"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice.response === 0) autoUpdater.quitAndInstall();
+  });
+  autoUpdater.on("error", () => {
+    // Update availability is degraded independently from playback health.
+  });
+  setTimeout(() => void autoUpdater.checkForUpdates(), 5_000);
+}
 
 function receiveDeepLink(value) {
   const request = parseContentDeckDeepLink(value);

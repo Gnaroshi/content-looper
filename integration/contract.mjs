@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
-export const appVersion = "0.1.0";
+export const appVersion = "0.2.0";
 export const capabilities = [
   "open-media-url",
   "open-session",
@@ -25,6 +25,7 @@ export function getStatusDocument(now = new Date()) {
     providerId: "content-looper",
     displayName: "ContentDeck",
     appVersion,
+    build: getBuildProvenance(),
     generatedAt: now.toISOString(),
     state: resolverAvailable ? "ok" : "partial",
     summary: resolverAvailable
@@ -50,10 +51,31 @@ export function getRecentSessionsDocument(limit = 10, now = new Date()) {
     schemaVersion: 1,
     providerId: "content-looper",
     appVersion,
+    build: getBuildProvenance(),
     generatedAt: now.toISOString(),
     total: sessions.length,
     sessions: sessions.slice(0, Math.max(0, Math.min(limit, 30))),
   };
+}
+
+export function getBuildProvenance() {
+  try {
+    const generated = JSON.parse(readFileSync(join(integrationDirectory, "build-provenance.json"), "utf8"));
+    if (/^[a-f0-9]{40}$/.test(generated.commit) && Number.isInteger(generated.number)) {
+      return { commit: generated.commit, number: generated.number, dirty: Boolean(generated.dirty) };
+    }
+  } catch {
+    // Source checkouts fall through to fixed read-only Git commands.
+  }
+  try {
+    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim();
+    const number = Number(execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim());
+    const dirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim());
+    if (/^[a-f0-9]{40}$/.test(commit) && Number.isInteger(number)) return { commit, number, dirty };
+  } catch {
+    // Packaged builds without provenance remain explicit instead of inventing a commit.
+  }
+  return { commit: null, number: null, dirty: null };
 }
 
 export function readSessionMirror() {

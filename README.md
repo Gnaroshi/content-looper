@@ -72,6 +72,14 @@ contentdeck --version
 
 패키지된 앱은 manifest와 CLI contract module을 `Contents/Resources/`에도 함께 배포합니다. 시스템 Node.js가 있는 로컬 환경에서는 `Contents/Resources/bin/contentdeck.mjs`를 고정 CLI entrypoint로 사용할 수 있습니다.
 
+`npm run app:pack`은 release와 같은 team의 Developer ID identity를 우선해
+local app을 서명하고, 필요하면 Apple Development로 fallback합니다.
+`npm run app:dmg`는 clean checkout, Developer ID, notarization을 모두
+요구하는 release 경로입니다. Packaged app은 public GitHub Release의 signed
+update를 확인하고, 다운로드와 restart 전에 사용자에게 확인합니다. Source
+checkout 업데이트는 별도이며 fixed `git fetch --prune origin` 이후에도
+merge/reset/build를 자동 수행하지 않습니다.
+
 미디어 전달은 `contentdeck://open?url=<encoded-https-url>`, 최근 세션 재개는 `contentdeck://session/<opaque-id>`를 사용합니다. Studio는 ContentDeck의 localStorage, 설정 파일, Fastify API에 직접 접근하지 않습니다.
 
 저장소 및 integration ID는 `content-looper`, 제품 표시 이름은 `ContentDeck`입니다. 저장소 이름 변경은 링크와 릴리스 호환성을 검토한 뒤 소유자가 별도로 결정합니다.

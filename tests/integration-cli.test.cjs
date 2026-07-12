@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { mkdtempSync, writeFileSync } = require("node:fs");
+const { mkdtempSync, readFileSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { spawnSync } = require("node:child_process");
@@ -8,6 +8,15 @@ const { describe, it } = require("node:test");
 const cli = join(__dirname, "..", "bin", "contentdeck.mjs");
 
 describe("ContentDeck Studio contract", () => {
+  it("publishes version, health, recent, signing, and update declarations", () => {
+    const manifest = JSON.parse(readFileSync(join(__dirname, "..", "gnaroshi.app.json"), "utf8"));
+    assert.equal(manifest.version, "0.2.0");
+    assert.deepEqual(manifest.entrypoints.cli.recentActivitySubcommand, ["sessions", "recent", "--json", "--limit", "5"]);
+    assert.equal(manifest.health.contractVersion, 1);
+    assert.equal(manifest.distribution.source.mode, "git-fetch");
+    assert.equal(manifest.distribution.macos.releaseSigning, "developer-id");
+  });
+
   it("returns versioned, path-free status JSON", () => {
     const stateDirectory = mkdtempSync(join(tmpdir(), "contentdeck-status-"));
     const result = run(["status", "--json"], stateDirectory);
@@ -17,6 +26,8 @@ describe("ContentDeck Studio contract", () => {
     assert.equal(payload.schemaVersion, 1);
     assert.equal(payload.providerId, "content-looper");
     assert.equal(payload.displayName, "ContentDeck");
+    assert.equal(payload.appVersion, "0.2.0");
+    assert.deepEqual(Object.keys(payload.build).sort(), ["commit", "dirty", "number"]);
     assert.equal(JSON.stringify(payload).includes(stateDirectory), false);
   });
 

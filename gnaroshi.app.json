@@ -3,7 +3,7 @@
   "id": "content-looper",
   "displayName": "ContentDeck",
   "repository": "Gnaroshi/content-looper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "platforms": ["macos", "web"],
   "kind": "application",
   "bundleId": "local.contentdeck.app",
@@ -19,14 +19,15 @@
     "app": {
       "bundleId": "local.contentdeck.app",
       "displayName": "ContentDeck",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "discovery": "bundle-id"
     },
     "cli": {
       "executable": "contentdeck",
       "versionSubcommand": ["--version"],
       "statusSubcommand": ["status", "--json"],
-      "healthSubcommand": ["status", "--json"]
+      "healthSubcommand": ["status", "--json"],
+      "recentActivitySubcommand": ["sessions", "recent", "--json", "--limit", "5"]
     },
     "localHttp": {},
     "deepLinks": [
@@ -36,7 +37,7 @@
       }
     ]
   },
-  "health": { "timeoutMs": 2000 },
+  "health": { "contractVersion": 1, "timeoutMs": 2000, "freshnessSeconds": 86400 },
   "icon": { "kind": "none" },
   "privacy": {
     "classification": "private-summary",
@@ -48,5 +49,10 @@
     "minimumStudioVersion": "0.1.0",
     "purpose": "Open supported media for focused looping and resume provider-owned learning sessions.",
     "readOnly": true
+  },
+  "distribution": {
+    "source": { "branch": "main", "mode": "git-fetch" },
+    "release": { "provider": "github-releases", "channel": "stable", "manifestAsset": "gnaroshi.app.json" },
+    "macos": { "developmentSigning": "developer-id", "releaseSigning": "developer-id", "notarizationRequired": true }
   }
 }
