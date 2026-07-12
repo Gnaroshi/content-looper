@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "applicationId": "contentdeck",
   "applicationVersion": "0.1.0",
-  "sourceCommit": "e229c8a4a3e1bad9aa3d4ff0692846cffd323ea8",
+  "sourceCommit": "5c6e2f94d1e1a18b6381ad65ee443609356426df",
   "scenarioId": "rights-safe-subtitle-loop",
   "usesDemoData": true,
   "captureDate": "2026-07-13",
