@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "applicationId": "contentdeck",
+  "applicationVersion": "0.1.0",
+  "sourceCommit": "e229c8a4a3e1bad9aa3d4ff0692846cffd323ea8",
+  "scenarioId": "rights-safe-subtitle-loop",
+  "usesDemoData": true,
+  "captureDate": "2026-07-13",
+  "captureCommand": "npm run showcase:dev",
+  "sourceFiles": ["src/showcase/ShowcaseApp.tsx", "public/showcase/contentdeck-demo.mp4"],
+  "privacyReviewed": true,
+  "screenshots": [
+    { "id": "loaded-player", "file": "screenshots/loaded-player.png", "width": 3200, "height": 2000, "stepId": "loaded-player", "locale": "en", "theme": "dark", "alt": "ContentDeck loaded with a generated local test clip and a visible subtitle track before segment selection." },
+    { "id": "segment-selection", "file": "screenshots/segment-selection.png", "width": 3200, "height": 2000, "stepId": "segment-selection", "locale": "en", "theme": "dark", "alt": "ContentDeck showing a selected 16-second segment from a rights-safe local test clip." },
+    { "id": "active-loop", "file": "screenshots/active-loop.png", "width": 3200, "height": 2000, "stepId": "active-loop", "locale": "en", "theme": "dark", "alt": "ContentDeck repeating a selected segment with subtitles and repeat enabled." },
+    { "id": "active-loop-light", "file": "screenshots/active-loop-light.png", "width": 3200, "height": 2000, "stepId": "active-loop", "locale": "en", "theme": "light", "alt": "Light theme verification of ContentDeck with a selected segment and repeat enabled." }
+  ]
+}

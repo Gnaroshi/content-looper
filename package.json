@@ -6,6 +6,9 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:dev:api\" \"npm:dev:web\"",
+    "showcase:dev": "VITE_GNAROSHI_SHOWCASE=1 vite --host 127.0.0.1",
+    "showcase:electron": "concurrently -k -n web,app -c green,magenta \"VITE_GNAROSHI_SHOWCASE=1 vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && CONTENTDECK_ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",
+    "test:showcase": "tsx --test src/showcase/mode.test.ts",
     "dev:web": "vite --host 127.0.0.1",
     "dev:api": "tsx watch server/index.ts",
     "app:dev": "concurrently -k -n api,web,app -c cyan,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"wait-on http://127.0.0.1:5173 http://127.0.0.1:8787/api/health && CONTENTDECK_ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",

@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { ShowcaseApp } from "./showcase/ShowcaseApp";
+import { isShowcaseMode } from "./showcase/mode";
 import "./styles.css";
 
 const root = document.querySelector("#root");
@@ -11,6 +13,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+      {isShowcaseMode(import.meta.env) ? <ShowcaseApp /> : <App />}
   </StrictMode>,
 );
