@@ -231,6 +231,23 @@ export function App() {
     return "지원 링크를 입력하세요.";
   }, [mode]);
 
+  const inputSource = useMemo(() => (url.trim() ? parseVideoUrl(url) : null), [url]);
+  const providerSupportText = useMemo(() => {
+    if (!url.trim()) return "지원: YouTube · X · TikTok HTTPS 공유 링크";
+    if (!inputSource) return "지원되지 않음: HTTPS YouTube, X 또는 TikTok 링크를 확인하세요.";
+    if (inputSource.platform === "youtube") return "YouTube: 정밀 구간 반복 · 자막은 원본 제공 상태에 따라 사용";
+    return `${inputSource.label}: 플랫폼 임베드 · 정밀 구간 반복과 자막 상태는 제공하지 않음`;
+  }, [inputSource, url]);
+  const nextActionText = useMemo(() => {
+    if (!url.trim()) return "다음: 공유 링크 입력";
+    if (!inputSource) return "다음: 지원되는 HTTPS 링크로 수정";
+    if (mode === "loading") return "다음: 메타데이터와 플레이어 준비 기다리기";
+    if (!source || getSourceKey(inputSource) !== getSourceKey(source)) return "다음: 불러오기";
+    if (!playerReady && source.platform === "youtube") return "다음: 플레이어 준비 기다리기";
+    if (source.platform === "youtube") return "다음: 전체 반복 재생 또는 구간 선택";
+    return "다음: 플랫폼 플레이어에서 재생";
+  }, [inputSource, mode, playerReady, source, url]);
+
   const visibleHistory = useMemo(() => {
     const query = historyQuery.trim().toLowerCase();
 
@@ -1442,11 +1459,14 @@ export function App() {
             </div>
           </form>
 
-          <div className="mt-4 flex min-h-9 items-center gap-2 text-sm text-stone-400">
-            <span className="inline-flex min-h-7 items-center rounded-full bg-violet-300/10 px-3 font-black text-violet-300">
+          <div className="mt-4 grid min-h-9 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-sm text-stone-400" aria-live="polite">
+            <span className="row-span-2 inline-flex min-h-7 items-center rounded-full bg-violet-300/10 px-3 font-black text-violet-300">
               {platformLabel}
             </span>
-            <span className="min-w-0 truncate">{nativeMedia?.title || statusText}</span>
+            <span className="min-w-0 truncate text-stone-300">{nativeMedia?.title || statusText}</span>
+            <span className={`min-w-0 text-xs ${url.trim() && !inputSource ? "text-red-300" : "text-stone-500"}`}>
+              {providerSupportText} · {nextActionText}
+            </span>
           </div>
 
           <div className="mt-4 grid grid-cols-5 gap-1 rounded-lg border border-white/10 bg-black/25 p-1">

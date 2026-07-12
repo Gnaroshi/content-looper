@@ -51,8 +51,8 @@ function createWindow(apiBase) {
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 860,
-    minWidth: 960,
-    minHeight: 720,
+    minWidth: 760,
+    minHeight: 600,
     backgroundColor: "#101314",
     title: "ContentDeck",
     webPreferences: {
