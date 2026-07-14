@@ -1,9 +1,12 @@
 {
   "name": "content-looper",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "electron/main.cjs",
+  "bin": {
+    "contentdeck": "bin/contentdeck.mjs"
+  },
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:dev:api\" \"npm:dev:web\"",
     "showcase:dev": "VITE_GNAROSHI_SHOWCASE=1 vite --host 127.0.0.1",
@@ -13,14 +16,23 @@
     "dev:api": "tsx watch server/index.ts",
     "app:dev": "concurrently -k -n api,web,app -c cyan,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"wait-on http://127.0.0.1:5173 http://127.0.0.1:8787/api/health && CONTENTDECK_ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",
     "app:build:server": "tsc -p tsconfig.server.json",
-    "app:pack": "npm run build && npm run app:build:server && electron-builder --mac dir",
-    "app:dmg": "npm run build && npm run app:build:server && electron-builder --mac dmg",
+    "app:pack": "npm run build && npm run app:build:server && node scripts/package-macos.mjs dir development",
+    "app:install": "CONTENTDECK_INSTALL=1 npm run app:pack",
+    "app:pack:test": "npm run build && npm run app:build:server && node scripts/package-macos.mjs dir test",
+    "app:dmg": "npm run build && npm run app:build:server && node scripts/package-macos.mjs release release",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "tsx --test tests/*.test.ts tests/*.test.cjs"
   },
   "build": {
     "appId": "local.contentdeck.app",
     "productName": "ContentDeck",
+    "protocols": [
+      {
+        "name": "ContentDeck media handoff",
+        "schemes": ["contentdeck"]
+      }
+    ],
     "directories": {
       "output": "dist-mac"
     },
@@ -29,8 +41,17 @@
       "dist-server/**",
       "electron/**",
       "bin/**",
+      "integration/**",
+      "gnaroshi.app.json",
       "package.json"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Gnaroshi",
+      "repo": "content-looper",
+      "releaseType": "release"
+    },
+    "afterSign": "scripts/notarize-app.cjs",
     "extraResources": [
       {
         "from": "bin",
@@ -38,10 +59,23 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "integration",
+        "to": "integration",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "gnaroshi.app.json",
+        "to": "gnaroshi.app.json"
       }
     ],
     "mac": {
       "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
       "target": [
         "dir"
       ]
@@ -49,6 +83,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "electron-updater": "^6.6.2",
     "fastify": "^5.8.5",
     "lucide-react": "^1.16.0",
     "motion": "^12.39.0",

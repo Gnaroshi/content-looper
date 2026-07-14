@@ -1,21 +1,30 @@
 import { z } from "zod";
-import type { VideoSource } from "./types";
+import type { VideoSource } from "./types.js";
 
-const urlSchema = z.string().trim().url();
+const urlSchema = z.string().trim().max(2_048).url();
+const mediaIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
+
+function isExactHostOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
 
 export function parseVideoUrl(value: string): VideoSource | null {
   const result = urlSchema.safeParse(value);
   if (!result.success) return null;
 
   const url = new URL(result.data);
-  const host = url.hostname.replace(/^www\./, "").toLowerCase();
-
-  if (host === "youtu.be") {
-    const videoId = url.pathname.split("/").filter(Boolean)[0];
-    return videoId ? buildYouTubeSource(videoId, url) : null;
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) {
+    return null;
   }
 
-  if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) {
+  const host = url.hostname.toLowerCase();
+
+  if (host === "youtu.be" || host === "www.youtu.be") {
+    const videoId = url.pathname.split("/").filter(Boolean)[0];
+    return isMediaId(videoId) ? buildYouTubeSource(videoId, url) : null;
+  }
+
+  if (isExactHostOrSubdomain(host, "youtube.com") || isExactHostOrSubdomain(host, "youtube-nocookie.com")) {
     const videoId = parseYouTubeId(url);
     return videoId ? buildYouTubeSource(videoId, url) : null;
   }
@@ -32,8 +41,10 @@ export function parseVideoUrl(value: string): VideoSource | null {
       : null;
   }
 
-  if (host.endsWith("tiktok.com")) {
+  if (isExactHostOrSubdomain(host, "tiktok.com")) {
     const videoId = url.pathname.match(/\/video\/(\d+)/)?.[1] ?? "";
+    const isShortRedirect = (host === "vm.tiktok.com" || host === "vt.tiktok.com") && url.pathname !== "/";
+    if (!videoId && !isShortRedirect) return null;
     return {
       platform: "tiktok",
       label: "TikTok",
@@ -43,6 +54,10 @@ export function parseVideoUrl(value: string): VideoSource | null {
   }
 
   return null;
+}
+
+export function isSupportedMediaUrl(value: string): boolean {
+  return parseVideoUrl(value) !== null;
 }
 
 function buildYouTubeSource(videoId: string, url: URL): VideoSource {
@@ -57,15 +72,19 @@ function buildYouTubeSource(videoId: string, url: URL): VideoSource {
 
 function parseYouTubeId(url: URL): string | null {
   const fromQuery = url.searchParams.get("v");
-  if (fromQuery) return fromQuery;
+  if (isMediaId(fromQuery)) return fromQuery;
 
   const parts = url.pathname.split("/").filter(Boolean);
   const videoIndex = parts.findIndex((part) => part === "embed" || part === "shorts" || part === "live");
-  if (videoIndex >= 0 && parts[videoIndex + 1]) {
+  if (videoIndex >= 0 && isMediaId(parts[videoIndex + 1])) {
     return parts[videoIndex + 1];
   }
 
   return null;
+}
+
+function isMediaId(value: string | null | undefined): value is string {
+  return Boolean(value && mediaIdPattern.test(value));
 }
 
 function parseYouTubeStart(url: URL): number {
