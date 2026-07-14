@@ -60,6 +60,11 @@ export type YoutubePlayerCtor = new (
 
 declare global {
   interface Window {
+    contentDeckIntegration?: {
+      onOpenRequest: (
+        callback: (request: { kind: "open"; url: string } | { kind: "session"; sessionId: string }) => void,
+      ) => () => void;
+    };
     onYouTubeIframeAPIReady?: () => void;
     YT?: {
       Player: YoutubePlayerCtor;

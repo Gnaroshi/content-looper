@@ -1,18 +1,23 @@
 import cors from "@fastify/cors";
 import { execFile } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import Fastify from "fastify";
 import { z } from "zod";
+import { isSupportedMediaUrl } from "../src/url.js";
+import { recentSessionInputSchema, writeRecentSessionMirror } from "./integration.js";
+import { isAllowedBrowserOrigin, isAuthorizedRequest, safeHttpsUrl } from "./security.js";
 
 const execFileAsync = promisify(execFile);
 const port = Number(process.env.CONTENTDECK_API_PORT ?? 8787);
 const allowPortFallback = process.env.CONTENTDECK_API_PORT_FALLBACK === "1";
+const apiToken = process.env.CONTENTDECK_API_TOKEN ?? "";
 const requestSchema = z.object({
-  url: z.string().trim().url(),
+  url: z.string().trim().max(2_048).refine(isSupportedMediaUrl),
 });
 const analyzeSchema = requestSchema.extend({
   sourceLanguage: z.enum(["auto", "en", "ja"]).default("auto"),
@@ -25,7 +30,7 @@ const hardwareSchema = z.object({
 });
 const modelInstallSchema = z.object({
   runtime: z.enum(["ollama", "mlx-whisper"]),
-  model: z.string().min(1),
+  model: z.string().min(1).max(128).regex(/^[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+)?$/),
 });
 const resolveCache = new Map<string, { expiresAt: number; response: ResolveResponse }>();
 const cacheMs = 30_000;
@@ -127,13 +132,30 @@ const app = Fastify({
 const here = fileURLToPath(new URL(".", import.meta.url));
 
 await app.register(cors, {
-  origin: true,
+  origin(origin, callback) {
+    callback(null, isAllowedBrowserOrigin(origin, Boolean(apiToken)));
+  },
+});
+
+app.addHook("onRequest", async (request, reply) => {
+  if (!isAuthorizedRequest(request.headers.authorization, apiToken)) {
+    return reply.code(401).send({ error: "ContentDeck local API authorization failed." });
+  }
 });
 
 app.get("/api/health", async () => ({
   ok: true,
-  tool: await findYtDlp().catch(() => null),
+  resolverAvailable: Boolean(await findYtDlp().catch(() => null)),
 }));
+
+app.post("/api/integration/sessions", async (request, reply) => {
+  const body = recentSessionInputSchema.safeParse(request.body);
+  if (!body.success) {
+    return reply.code(400).send({ error: "Recent session summary is invalid." });
+  }
+  await writeRecentSessionMirror(body.data);
+  return { ok: true, count: body.data.sessions.length };
+});
 
 app.post("/api/resolve", async (request, reply) => {
   const body = requestSchema.safeParse(request.body);
@@ -150,7 +172,7 @@ app.post("/api/resolve", async (request, reply) => {
     });
     return await resolveMedia(body.data.url, abortController.signal);
   } catch (error) {
-    request.log.error(error);
+    request.log.warn("media resolution failed");
     return reply.code(502).send({ error: formatToolError(error) });
   }
 });
@@ -170,7 +192,7 @@ app.post("/api/learning/analyze", async (request, reply) => {
     });
     return await analyzeLearningVideo(body.data.url, body.data.sourceLanguage, abortController.signal);
   } catch (error) {
-    request.log.error(error);
+    request.log.warn("learning analysis failed");
     return reply.code(502).send({ error: formatToolError(error) });
   }
 });
@@ -231,6 +253,10 @@ app.post("/api/models/install", async (request, reply) => {
     };
   }
 
+  if (!modelRegistry.some((item) => item.runtime === "ollama" && item.id === body.data.model)) {
+    return reply.code(400).send({ error: "등록된 Ollama 모델만 설치할 수 있습니다." });
+  }
+
   const ollama = await findOptionalBinary(["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "ollama"]);
   if (!ollama) {
     return reply.code(404).send({ error: "Ollama를 찾지 못했습니다. 먼저 Ollama를 설치하세요." });
@@ -256,14 +282,18 @@ async function resolveMedia(url: string, signal: AbortSignal): Promise<ResolveRe
 
   const response = {
     duration: Math.floor(info.duration ?? 0),
-    mediaUrl: format.url,
-    sourceUrl: info.webpage_url ?? url,
-    thumbnail: info.thumbnail ?? "",
+    mediaUrl: safeHttpsUrl(format.url),
+    sourceUrl: safeHttpsUrl(info.webpage_url) ?? url,
+    thumbnail: safeHttpsUrl(info.thumbnail) ?? "",
     title: info.title ?? "Untitled",
   };
 
-  resolveCache.set(url, { expiresAt: now + cacheMs, response });
-  return response;
+  if (!response.mediaUrl) {
+    throw new Error("Provider returned an unsafe media URL.");
+  }
+
+  resolveCache.set(url, { expiresAt: now + cacheMs, response: response as ResolveResponse });
+  return response as ResolveResponse;
 }
 
 async function analyzeLearningVideo(url: string, sourceLanguage: "auto" | "en" | "ja", signal: AbortSignal) {
@@ -282,7 +312,7 @@ async function analyzeLearningVideo(url: string, sourceLanguage: "auto" | "en" |
 
   return {
     title: info.title ?? "Untitled",
-    thumbnail: info.thumbnail ?? "",
+    thumbnail: safeHttpsUrl(info.thumbnail) ?? "",
     sourceLanguage: nativeLang,
     hasKoreanTrack: Boolean(koreanTrack),
     hasNativeTrack: Boolean(nativeTrack),
@@ -341,8 +371,9 @@ function findTrack(collection: MediaInfo["subtitles"], language: "en" | "ja" | "
 }
 
 async function fetchCaptions(track: CaptionTrack, signal: AbortSignal): Promise<Array<Omit<SubtitleLine, "ko">>> {
-  if (!track.url) return [];
-  const response = await fetch(track.url, { signal });
+  const captionUrl = safeHttpsUrl(track.url);
+  if (!captionUrl) return [];
+  const response = await fetch(captionUrl, { signal });
   if (!response.ok) return [];
   return parseVtt(await response.text());
 }
@@ -566,7 +597,7 @@ async function findOptionalBinary(candidates: string[]): Promise<string | null> 
   for (const candidate of candidates) {
     if (candidate.includes("/")) {
       try {
-        await access(candidate);
+        await assertExecutableFile(candidate);
         return candidate;
       } catch {
         continue;
@@ -587,7 +618,7 @@ async function findOptionalBinary(candidates: string[]): Promise<string | null> 
 async function findYtDlp(): Promise<string> {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const candidates = [
-    process.env.YTDLP_PATH,
+    normalizeBinaryOverride(process.env.YTDLP_PATH),
     resourcesPath ? resolve(resourcesPath, "bin/yt-dlp_macos") : undefined,
     resourcesPath ? resolve(resourcesPath, ".venv/bin/yt-dlp") : undefined,
     resolve(here, "../bin/yt-dlp_macos"),
@@ -601,7 +632,7 @@ async function findYtDlp(): Promise<string> {
   for (const candidate of candidates) {
     if (candidate.includes("/")) {
       try {
-        await access(candidate);
+        await assertExecutableFile(candidate);
         return candidate;
       } catch {
         continue;
@@ -652,9 +683,19 @@ function compareFormatQuality(a: MediaFormat, b: MediaFormat): number {
 }
 
 function formatToolError(error: unknown): string {
-  if (!(error instanceof Error)) return "미디어 정보를 가져오지 못했습니다.";
-  const message = error.message.replace(/\s+/g, " ").trim();
-  return message || "미디어 정보를 가져오지 못했습니다.";
+  if (error instanceof Error && error.name === "AbortError") return "미디어 요청이 취소되었습니다.";
+  return "미디어 정보를 가져오지 못했습니다. 링크와 yt-dlp 상태를 확인하세요.";
+}
+
+function normalizeBinaryOverride(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value.startsWith("/") ? value : undefined;
+}
+
+async function assertExecutableFile(candidate: string): Promise<void> {
+  const details = await stat(candidate);
+  if (!details.isFile()) throw new Error("Binary candidate is not a regular file.");
+  await access(candidate, constants.X_OK);
 }
 
 export const apiBase = await listenWithFallback(port);

@@ -8,6 +8,8 @@ dist/
 dist-server/
 dist-mac/
 release/
+.release/
+integration/build-provenance.json
 out/
 
 # Local Python/runtime environments
@@ -19,6 +21,7 @@ __pycache__/
 bin/*
 !bin/
 !bin/README.md
+!bin/contentdeck.mjs
 
 # Logs and temporary files
 *.log

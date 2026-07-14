@@ -231,6 +231,23 @@ export function App() {
     return "지원 링크를 입력하세요.";
   }, [mode]);
 
+  const inputSource = useMemo(() => (url.trim() ? parseVideoUrl(url) : null), [url]);
+  const providerSupportText = useMemo(() => {
+    if (!url.trim()) return "지원: YouTube · X · TikTok HTTPS 공유 링크";
+    if (!inputSource) return "지원되지 않음: HTTPS YouTube, X 또는 TikTok 링크를 확인하세요.";
+    if (inputSource.platform === "youtube") return "YouTube: 정밀 구간 반복 · 자막은 원본 제공 상태에 따라 사용";
+    return `${inputSource.label}: 플랫폼 임베드 · 정밀 구간 반복과 자막 상태는 제공하지 않음`;
+  }, [inputSource, url]);
+  const nextActionText = useMemo(() => {
+    if (!url.trim()) return "다음: 공유 링크 입력";
+    if (!inputSource) return "다음: 지원되는 HTTPS 링크로 수정";
+    if (mode === "loading") return "다음: 메타데이터와 플레이어 준비 기다리기";
+    if (!source || getSourceKey(inputSource) !== getSourceKey(source)) return "다음: 불러오기";
+    if (!playerReady && source.platform === "youtube") return "다음: 플레이어 준비 기다리기";
+    if (source.platform === "youtube") return "다음: 전체 반복 재생 또는 구간 선택";
+    return "다음: 플랫폼 플레이어에서 재생";
+  }, [inputSource, mode, playerReady, source, url]);
+
   const visibleHistory = useMemo(() => {
     const query = historyQuery.trim().toLowerCase();
 
@@ -251,8 +268,8 @@ export function App() {
     async function loadLearningConfig() {
       try {
         const [configResponse, registryResponse] = await Promise.all([
-          fetch(getApiUrl("/api/learning/config")),
-          fetch(getApiUrl("/api/models/registry")),
+          apiFetch("/api/learning/config"),
+          apiFetch("/api/models/registry"),
         ]);
         const configPayload = (await configResponse.json()) as { config?: HardwareConfig; recommendations?: ModelRecommendation };
         const registryPayload = (await registryResponse.json()) as { models?: ModelRegistryItem[] };
@@ -270,6 +287,10 @@ export function App() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    void mirrorRecentSessions(history);
+  }, [history]);
 
   const persistHistory = useCallback((updater: (items: HistoryEntry[]) => HistoryEntry[]) => {
     setHistory((items) => {
@@ -632,7 +653,7 @@ export function App() {
       try {
         const abortController = new AbortController();
         resolveAbortRef.current = abortController;
-        const response = await fetch(getApiUrl("/api/resolve"), {
+        const response = await apiFetch("/api/resolve", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -844,6 +865,29 @@ export function App() {
     },
     [applySegment, clearPlayer, patchHistory, resetSession, upsertHistory],
   );
+
+  useEffect(() => {
+    return window.contentDeckIntegration?.onOpenRequest((request) => {
+      if (request.kind === "open") {
+        setUrl(request.url);
+        loadUrl(request.url);
+        return;
+      }
+
+      void Promise.all(
+        historyRef.current.map(async (entry) => ({ entry, sessionId: await createSessionId(entry.key) })),
+      ).then((sessions) => {
+        const match = sessions.find((session) => session.sessionId === request.sessionId);
+        if (!match) {
+          setError("요청한 최근 세션을 이 ContentDeck 저장소에서 찾지 못했습니다.");
+          setMessage("");
+          return;
+        }
+        setUrl(match.entry.url);
+        loadUrl(match.entry.url);
+      });
+    });
+  }, [loadUrl]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1169,7 +1213,7 @@ export function App() {
     setRevealedQuiz({});
 
     try {
-      const response = await fetch(getApiUrl("/api/learning/analyze"), {
+      const response = await apiFetch("/api/learning/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: targetUrl, sourceLanguage: learningSourceLanguage }),
@@ -1191,7 +1235,7 @@ export function App() {
     setModelStatus("로컬 AI 설정을 저장하는 중입니다.");
 
     try {
-      const response = await fetch(getApiUrl("/api/learning/config"), {
+      const response = await apiFetch("/api/learning/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(hardwareConfig),
@@ -1209,7 +1253,7 @@ export function App() {
     setModelStatus("최신 모델 목록을 확인하는 중입니다.");
 
     try {
-      const response = await fetch(getApiUrl("/api/models/live"));
+      const response = await apiFetch("/api/models/live");
       const payload = (await response.json()) as { error?: string; models?: ModelRegistryItem[] };
       if (!response.ok || payload.error) throw new Error(payload.error || "모델 목록을 갱신하지 못했습니다.");
       setModelRegistry(payload.models ?? []);
@@ -1224,7 +1268,7 @@ export function App() {
     setModelStatus(`${model.id} 설치를 시작합니다.`);
 
     try {
-      const response = await fetch(getApiUrl("/api/models/install"), {
+      const response = await apiFetch("/api/models/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ runtime: model.runtime, model: model.id }),
@@ -1415,11 +1459,14 @@ export function App() {
             </div>
           </form>
 
-          <div className="mt-4 flex min-h-9 items-center gap-2 text-sm text-stone-400">
-            <span className="inline-flex min-h-7 items-center rounded-full bg-violet-300/10 px-3 font-black text-violet-300">
+          <div className="mt-4 grid min-h-9 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-sm text-stone-400" aria-live="polite">
+            <span className="row-span-2 inline-flex min-h-7 items-center rounded-full bg-violet-300/10 px-3 font-black text-violet-300">
               {platformLabel}
             </span>
-            <span className="min-w-0 truncate">{nativeMedia?.title || statusText}</span>
+            <span className="min-w-0 truncate text-stone-300">{nativeMedia?.title || statusText}</span>
+            <span className={`min-w-0 text-xs ${url.trim() && !inputSource ? "text-red-300" : "text-stone-500"}`}>
+              {providerSupportText} · {nextActionText}
+            </span>
           </div>
 
           <div className="mt-4 grid grid-cols-5 gap-1 rounded-lg border border-white/10 bg-black/25 p-1">
@@ -2346,6 +2393,10 @@ function getApiUrl(path: string): string {
   return path;
 }
 
+function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(getApiUrl(path), init);
+}
+
 function readHistory(): HistoryEntry[] {
   if (!("localStorage" in window)) return [];
 
@@ -2370,6 +2421,33 @@ function writeHistory(items: HistoryEntry[]) {
   } catch {
     // Storage can be unavailable in locked-down browser contexts.
   }
+}
+
+async function mirrorRecentSessions(items: HistoryEntry[]): Promise<void> {
+  if (!("crypto" in window) || !window.crypto.subtle) return;
+  try {
+    const sessions = await Promise.all(
+      items.slice(0, maxHistoryItems).map(async (entry) => ({
+        sessionId: await createSessionId(entry.key),
+        provider: entry.platform,
+        updatedAt: entry.updatedAt,
+        loopMode: entry.segment.enabled && entry.segment.end > entry.segment.start ? "segment" : "full",
+      })),
+    );
+    await apiFetch("/api/integration/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessions }),
+    });
+  } catch {
+    // The mirror is derived integration state; playback history remains canonical in localStorage.
+  }
+}
+
+async function createSessionId(key: string): Promise<string> {
+  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `session_${hex.slice(0, 24)}`;
 }
 
 function normalizeHistoryEntry(value: unknown): HistoryEntry | null {
