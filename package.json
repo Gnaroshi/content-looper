@@ -73,12 +73,16 @@
       }
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.video",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "target": [
         "dir"
       ]
+    },
+    "dmg": {
+      "icon": "build/icon.icns"
     }
   },
   "dependencies": {
