@@ -68,6 +68,10 @@
         ]
       },
       {
+        "from": "integration/build-provenance.json",
+        "to": "build-provenance.json"
+      },
+      {
         "from": "gnaroshi.app.json",
         "to": "gnaroshi.app.json"
       }

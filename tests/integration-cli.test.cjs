@@ -10,11 +10,16 @@ const cli = join(__dirname, "..", "bin", "contentdeck.mjs");
 describe("ContentDeck Studio contract", () => {
   it("publishes version, health, recent, signing, and update declarations", () => {
     const manifest = JSON.parse(readFileSync(join(__dirname, "..", "gnaroshi.app.json"), "utf8"));
+    const packageMetadata = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
     assert.equal(manifest.version, "0.2.0");
     assert.deepEqual(manifest.entrypoints.cli.recentActivitySubcommand, ["sessions", "recent", "--json", "--limit", "5"]);
     assert.equal(manifest.health.contractVersion, 1);
     assert.equal(manifest.distribution.source.mode, "git-fetch");
     assert.equal(manifest.distribution.macos.releaseSigning, "developer-id");
+    assert.equal(
+      packageMetadata.build.extraResources.some((resource) => resource.from === "integration/build-provenance.json" && resource.to === "build-provenance.json"),
+      true,
+    );
   });
 
   it("returns versioned, path-free status JSON", () => {
