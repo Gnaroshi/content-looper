@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { mkdtempSync, readFileSync, writeFileSync } = require("node:fs");
+const { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { spawnSync } = require("node:child_process");
@@ -29,6 +29,25 @@ describe("ContentDeck Studio contract", () => {
     assert.equal(payload.appVersion, "0.2.0");
     assert.deepEqual(Object.keys(payload.build).sort(), ["commit", "dirty", "number"]);
     assert.equal(JSON.stringify(payload).includes(stateDirectory), false);
+  });
+
+  it("never treats a parent checkout as ContentDeck build provenance", () => {
+    const parent = mkdtempSync(join(tmpdir(), "contentdeck-parent-git-"));
+    assert.equal(spawnSync("git", ["init", parent], { encoding: "utf8" }).status, 0);
+    writeFileSync(join(parent, "marker.txt"), "parent repository\n");
+    assert.equal(spawnSync("git", ["-C", parent, "add", "marker.txt"], { encoding: "utf8" }).status, 0);
+    assert.equal(spawnSync("git", ["-C", parent, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "parent"], { encoding: "utf8" }).status, 0);
+
+    const installedRoot = join(parent, "lib", "node_modules", "content-looper");
+    mkdirSync(join(installedRoot, "bin"), { recursive: true });
+    mkdirSync(join(installedRoot, "integration"), { recursive: true });
+    copyFileSync(cli, join(installedRoot, "bin", "contentdeck.mjs"));
+    copyFileSync(join(__dirname, "..", "integration", "contract.mjs"), join(installedRoot, "integration", "contract.mjs"));
+
+    const stateDirectory = mkdtempSync(join(tmpdir(), "contentdeck-parent-state-"));
+    const result = run(["status", "--json"], stateDirectory, join(installedRoot, "bin", "contentdeck.mjs"));
+    assert.equal(result.status, 0);
+    assert.deepEqual(JSON.parse(result.stdout).build, { commit: null, number: null, dirty: null });
   });
 
   it("returns only sanitized recent-session summaries", () => {
@@ -73,8 +92,8 @@ describe("ContentDeck Studio contract", () => {
   });
 });
 
-function run(args, stateDirectory) {
-  return spawnSync(process.execPath, [cli, ...args], {
+function run(args, stateDirectory, executable = cli) {
+  return spawnSync(process.execPath, [executable, ...args], {
     encoding: "utf8",
     env: { ...process.env, CONTENTDECK_STATE_DIR: stateDirectory, YTDLP_PATH: "" },
   });

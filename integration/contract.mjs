@@ -68,10 +68,17 @@ export function getBuildProvenance() {
     // Source checkouts fall through to fixed read-only Git commands.
   }
   try {
-    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim();
-    const number = Number(execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim());
-    const dirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim());
-    if (/^[a-f0-9]{40}$/.test(commit) && Number.isInteger(number)) return { commit, number, dirty };
+    const repositoryRoot = resolve(execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: packageRoot,
+      encoding: "utf8",
+      timeout: 2_000,
+    }).trim());
+    if (repositoryRoot === packageRoot) {
+      const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim();
+      const number = Number(execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim());
+      const dirty = Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: packageRoot, encoding: "utf8", timeout: 2_000 }).trim());
+      if (/^[a-f0-9]{40}$/.test(commit) && Number.isInteger(number)) return { commit, number, dirty };
+    }
   } catch {
     // Packaged builds without provenance remain explicit instead of inventing a commit.
   }
