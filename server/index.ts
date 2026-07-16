@@ -1,18 +1,19 @@
 import cors from "@fastify/cors";
-import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 import Fastify from "fastify";
 import { z } from "zod";
 import { isSupportedMediaUrl } from "../src/url.js";
 import { recentSessionInputSchema, writeRecentSessionMirror } from "./integration.js";
+import { ManagedProcessRunner } from "./process-lifecycle.js";
+import { RequestCancellationRegistry } from "./request-lifecycle.js";
 import { isAllowedBrowserOrigin, isAuthorizedRequest, safeHttpsUrl } from "./security.js";
 
-const execFileAsync = promisify(execFile);
+const processRunner = new ManagedProcessRunner();
+const execFileAsync = processRunner.execFile;
 const port = Number(process.env.CONTENTDECK_API_PORT ?? 8787);
 const allowPortFallback = process.env.CONTENTDECK_API_PORT_FALLBACK === "1";
 const apiToken = process.env.CONTENTDECK_API_TOKEN ?? "";
@@ -129,6 +130,7 @@ const modelRegistry = [
 const app = Fastify({
   logger: true,
 });
+const requestControllers = new RequestCancellationRegistry();
 const here = fileURLToPath(new URL(".", import.meta.url));
 
 await app.register(cors, {
@@ -141,7 +143,15 @@ app.addHook("onRequest", async (request, reply) => {
   if (!isAuthorizedRequest(request.headers.authorization, apiToken)) {
     return reply.code(401).send({ error: "ContentDeck local API authorization failed." });
   }
+  requestControllers.begin(request.id, reply.raw, () => reply.sent);
 });
+
+app.addHook("onResponse", async (request) => requestControllers.finish(request.id));
+app.addHook("onError", async (request) => requestControllers.finish(request.id));
+
+function requestSignal(requestId: string): AbortSignal {
+  return requestControllers.signal(requestId);
+}
 
 app.get("/api/health", async () => ({
   ok: true,
@@ -164,13 +174,7 @@ app.post("/api/resolve", async (request, reply) => {
   }
 
   try {
-    const abortController = new AbortController();
-    reply.raw.once("close", () => {
-      if (!reply.sent) {
-        abortController.abort();
-      }
-    });
-    return await resolveMedia(body.data.url, abortController.signal);
+    return await resolveMedia(body.data.url, requestSignal(request.id));
   } catch (error) {
     request.log.warn("media resolution failed");
     return reply.code(502).send({ error: formatToolError(error) });
@@ -184,13 +188,7 @@ app.post("/api/learning/analyze", async (request, reply) => {
   }
 
   try {
-    const abortController = new AbortController();
-    reply.raw.once("close", () => {
-      if (!reply.sent) {
-        abortController.abort();
-      }
-    });
-    return await analyzeLearningVideo(body.data.url, body.data.sourceLanguage, abortController.signal);
+    return await analyzeLearningVideo(body.data.url, body.data.sourceLanguage, requestSignal(request.id));
   } catch (error) {
     request.log.warn("learning analysis failed");
     return reply.code(502).send({ error: formatToolError(error) });
@@ -225,11 +223,12 @@ app.get("/api/models/registry", async () => ({
   models: modelRegistry,
 }));
 
-app.get("/api/models/live", async () => {
+app.get("/api/models/live", async (request) => {
+  const signal = requestSignal(request.id);
   const results = await Promise.all([
-    searchHuggingFace("whisper large v3 turbo mlx", "automatic-speech-recognition"),
-    searchHuggingFace("qwen3 8b instruct", "text-generation"),
-    searchHuggingFace("gemma3 12b", "text-generation"),
+    searchHuggingFace("whisper large v3 turbo mlx", "automatic-speech-recognition", signal),
+    searchHuggingFace("qwen3 8b instruct", "text-generation", signal),
+    searchHuggingFace("gemma3 12b", "text-generation", signal),
   ]);
 
   return {
@@ -262,7 +261,10 @@ app.post("/api/models/install", async (request, reply) => {
     return reply.code(404).send({ error: "Ollama를 찾지 못했습니다. 먼저 Ollama를 설치하세요." });
   }
 
-  await execFileAsync(ollama, ["pull", body.data.model], { timeout: 1000 * 60 * 20 });
+  await execFileAsync(ollama, ["pull", body.data.model], {
+    signal: requestSignal(request.id),
+    timeout: 1000 * 60 * 20,
+  });
   return { ok: true, model: body.data.model };
 });
 
@@ -308,7 +310,7 @@ async function analyzeLearningVideo(url: string, sourceLanguage: "auto" | "en" |
   const fallbackVocabulary = extractVocabulary(nativeText, nativeLang);
   const fallbackPhrases = extractPhrases(nativeText, nativeLang);
   const fallbackQuiz = buildQuiz(subtitles, nativeLang);
-  const aiItems = await buildLocalAiLearningItems(nativeText, subtitles, nativeLang).catch(() => null);
+  const aiItems = await buildLocalAiLearningItems(nativeText, subtitles, nativeLang, signal).catch(() => null);
 
   return {
     title: info.title ?? "Untitled",
@@ -469,12 +471,20 @@ function buildQuiz(subtitles: SubtitleLine[], language: "en" | "ja") {
     }));
 }
 
-async function buildLocalAiLearningItems(text: string, subtitles: SubtitleLine[], language: "en" | "ja") {
+async function buildLocalAiLearningItems(
+  text: string,
+  subtitles: SubtitleLine[],
+  language: "en" | "ja",
+  requestAbortSignal: AbortSignal,
+) {
   if (!text.trim()) return null;
 
   const config = await readStoredHardwareConfig();
   const model = recommendModels(config).quiz;
   const controller = new AbortController();
+  const abortForRequest = () => controller.abort();
+  requestAbortSignal.addEventListener("abort", abortForRequest, { once: true });
+  if (requestAbortSignal.aborted) controller.abort();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   const sample = subtitles
     .slice(0, 80)
@@ -534,6 +544,7 @@ async function buildLocalAiLearningItems(text: string, subtitles: SubtitleLine[]
     };
   } finally {
     clearTimeout(timeout);
+    requestAbortSignal.removeEventListener("abort", abortForRequest);
   }
 }
 
@@ -569,7 +580,7 @@ function recommendModels(profile: z.infer<typeof hardwareSchema>) {
   };
 }
 
-async function searchHuggingFace(search: string, pipeline: string) {
+async function searchHuggingFace(search: string, pipeline: string, signal: AbortSignal) {
   const url = new URL("https://huggingface.co/api/models");
   url.searchParams.set("search", search);
   url.searchParams.set("pipeline_tag", pipeline);
@@ -578,7 +589,7 @@ async function searchHuggingFace(search: string, pipeline: string) {
   url.searchParams.set("limit", "6");
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (!response.ok) return [];
     const models = (await response.json()) as Array<{ downloads?: number; id?: string; likes?: number; pipeline_tag?: string; tags?: string[] }>;
     return models.map((model) => ({
@@ -699,6 +710,27 @@ async function assertExecutableFile(candidate: string): Promise<void> {
 }
 
 export const apiBase = await listenWithFallback(port);
+
+let shutdownPromise: Promise<void> | null = null;
+
+export function shutdownApi(): Promise<void> {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = (async () => {
+    requestControllers.abortAll();
+    resolveCache.clear();
+    await processRunner.shutdown();
+    await app.close().catch(() => undefined);
+  })();
+  return shutdownPromise;
+}
+
+async function shutdownFromSignal(exitCode: number): Promise<void> {
+  await shutdownApi().catch(() => undefined);
+  process.exit(exitCode);
+}
+
+process.once("SIGTERM", () => void shutdownFromSignal(0));
+process.once("SIGINT", () => void shutdownFromSignal(130));
 
 async function listenWithFallback(initialPort: number): Promise<string> {
   try {

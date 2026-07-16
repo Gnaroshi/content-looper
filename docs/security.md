@@ -17,10 +17,12 @@
 
 ## Processes and remote content
 
-- yt-dlp and Ollama use `execFile` with fixed argument arrays and no shell.
+- yt-dlp and Ollama start as fixed executables with fixed argument arrays and no shell.
+- yt-dlp, Ollama, and binary probes run in isolated process groups. Request cancellation, timeout, Fastify shutdown, and Electron quit terminate descendants as well as the direct child.
 - yt-dlp overrides must be absolute executable regular files. Ollama installation accepts only registered model IDs.
 - Provider media, caption, thumbnail, and canonical URLs are revalidated before use; unsafe schemes are discarded.
 - Child-process diagnostics returned to the renderer are bounded and do not include commands, tokens, local paths, or raw provider output.
+- Fastify releases per-request cancellation listeners after every response, aborts unfinished requests when a connection closes, and closes its loopback listener before Electron exits.
 
 ## Studio-visible data
 

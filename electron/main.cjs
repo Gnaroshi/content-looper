@@ -19,6 +19,10 @@ const apiPort = process.env.CONTENTDECK_API_PORT || (isDev ? "8787" : "18787");
 const apiToken = isDev ? "" : randomBytes(32).toString("hex");
 let mainWindow = null;
 let pendingOpenRequest = process.argv.map(parseContentDeckDeepLink).find(Boolean) || null;
+let shutdownBundledApi = async () => {};
+let updateCheckTimer = null;
+let shutdownStarted = false;
+let quitAfterShutdown = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -45,6 +49,9 @@ async function startBundledApi() {
   process.env.CONTENTDECK_API_TOKEN = apiToken;
   const serverPath = path.join(__dirname, "..", "dist-server", "server", "index.js");
   const serverModule = await import(pathToFileURL(serverPath).href);
+  if (typeof serverModule.shutdownApi === "function") {
+    shutdownBundledApi = serverModule.shutdownApi;
+  }
   return serverModule.apiBase || `http://127.0.0.1:${apiPort}`;
 }
 
@@ -179,7 +186,7 @@ function configureUpdates() {
   autoUpdater.on("error", () => {
     // Update availability is degraded independently from playback health.
   });
-  setTimeout(() => void autoUpdater.checkForUpdates(), 5_000);
+  updateCheckTimer = setTimeout(() => void autoUpdater.checkForUpdates(), 5_000);
 }
 
 function receiveDeepLink(value) {
@@ -198,4 +205,22 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", (event) => {
+  if (quitAfterShutdown) return;
+  event.preventDefault();
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  if (updateCheckTimer) {
+    clearTimeout(updateCheckTimer);
+    updateCheckTimer = null;
+  }
+  void shutdownBundledApi()
+    .catch(() => undefined)
+    .finally(() => {
+      autoUpdater.removeAllListeners();
+      quitAfterShutdown = true;
+      app.quit();
+    });
 });
