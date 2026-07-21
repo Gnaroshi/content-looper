@@ -11,7 +11,7 @@ describe("ContentDeck Studio contract", () => {
   it("publishes version, health, recent, signing, and update declarations", () => {
     const manifest = JSON.parse(readFileSync(join(__dirname, "..", "gnaroshi.app.json"), "utf8"));
     const packageMetadata = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
-    assert.equal(manifest.version, "0.2.0");
+    assert.equal(manifest.version, "0.2.1");
     assert.deepEqual(manifest.entrypoints.cli.recentActivitySubcommand, ["sessions", "recent", "--json", "--limit", "5"]);
     assert.equal(manifest.health.contractVersion, 1);
     assert.equal(manifest.distribution.source.mode, "git-fetch");
@@ -31,7 +31,7 @@ describe("ContentDeck Studio contract", () => {
     assert.equal(payload.schemaVersion, 1);
     assert.equal(payload.providerId, "content-looper");
     assert.equal(payload.displayName, "ContentDeck");
-    assert.equal(payload.appVersion, "0.2.0");
+    assert.equal(payload.appVersion, "0.2.1");
     assert.deepEqual(Object.keys(payload.build).sort(), ["commit", "dirty", "number"]);
     assert.equal(JSON.stringify(payload).includes(stateDirectory), false);
   });

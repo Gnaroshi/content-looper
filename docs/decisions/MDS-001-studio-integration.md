@@ -38,7 +38,7 @@ The stable repository and integration ID remains `content-looper`. The current p
 
 The contract is additive. Existing users do not need to migrate localStorage or learning configuration. The app generates a rebuildable opaque recent-session mirror after history changes. Existing HTTP or unsupported provider inputs are now rejected at the boundary; users must supply supported HTTPS share URLs. OS deep-link handling becomes available after installing or launching a packaged app that registers the `contentdeck` scheme.
 
-Version `0.2.0` adds Git commit/build provenance, health/recent manifest declarations, Apple Development signing for stable local identity, and a Developer ID/notarized GitHub Release path. The packaged Electron app checks the public GitHub release feed and asks before download and restart; source checkout fetch remains separate and never merges or resets dirty work.
+Version `0.2.1` adds a fixed clean-source local installer used by Studio's owner-enabled update-before-open policy. It also retains Git commit/build provenance, health/recent manifest declarations, Apple Development signing for stable local identity, and a Developer ID/notarized GitHub Release path. The packaged Electron app checks the public GitHub release feed and asks before download and restart; Studio refuses dirty or diverged source and never resets local work.
 
 ## Validation
 

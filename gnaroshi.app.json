@@ -3,7 +3,7 @@
   "id": "content-looper",
   "displayName": "ContentDeck",
   "repository": "Gnaroshi/content-looper",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "platforms": ["macos", "web"],
   "kind": "application",
   "bundleId": "local.contentdeck.app",
@@ -19,7 +19,7 @@
     "app": {
       "bundleId": "local.contentdeck.app",
       "displayName": "ContentDeck",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "discovery": "bundle-id"
     },
     "cli": {

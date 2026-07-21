@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
-export const appVersion = "0.2.0";
+export const appVersion = "0.2.1";
 export const capabilities = [
   "open-media-url",
   "open-session",
