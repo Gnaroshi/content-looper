@@ -72,6 +72,8 @@ contentdeck --version
 
 패키지된 앱은 manifest와 CLI contract module을 `Contents/Resources/`에도 함께 배포합니다. 시스템 Node.js가 있는 로컬 환경에서는 `Contents/Resources/bin/contentdeck.mjs`를 고정 CLI entrypoint로 사용할 수 있습니다.
 
+`scripts/install_local.sh`는 앱을 빌드한 뒤 CLI를 npm archive에서 `~/.local`에 self-contained copy로 설치합니다. Source checkout을 가리키는 global symlink는 Studio의 trusted-prefix 검증을 통과하지 않으므로 만들지 않습니다.
+
 `npm run app:pack`은 release와 같은 team의 Developer ID identity를 우선해
 local app을 서명하고, 필요하면 Apple Development로 fallback합니다.
 `npm run app:dmg`는 clean checkout, Developer ID, notarization을 모두

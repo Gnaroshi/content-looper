@@ -14,6 +14,17 @@ NPM="$(command -v npm || true)"
 [[ -n "$NPM" ]] || { echo "npm is required to build ContentDeck." >&2; exit 2; }
 cd "$ROOT"
 "$NPM" ci
-"$NPM" install --global --prefix "$HOME/.local" "$ROOT"
 CONTENTDECK_INSTALL=1 "$NPM" run app:pack
+PACKAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/contentdeck-cli.XXXXXX")"
+trap 'rm -rf "$PACKAGE_DIR"' EXIT
+PACKAGE_NAME="$("$NPM" pack --pack-destination "$PACKAGE_DIR" --silent)"
+"$NPM" install --global --prefix "$HOME/.local" "$PACKAGE_DIR/$PACKAGE_NAME"
+CLI_ROOT="$(realpath "$HOME/.local/bin/contentdeck")"
+case "$CLI_ROOT" in
+  "$HOME/.local"/*) ;;
+  *)
+    echo "ContentDeck CLI installation escaped the trusted local prefix." >&2
+    exit 5
+    ;;
+esac
 echo "Installed the current signed ContentDeck app and CLI provider."

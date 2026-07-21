@@ -40,6 +40,8 @@ The contract is additive. Existing users do not need to migrate localStorage or 
 
 Version `0.2.1` adds a fixed clean-source local installer used by Studio's owner-enabled update-before-open policy. It also retains Git commit/build provenance, health/recent manifest declarations, Apple Development signing for stable local identity, and a Developer ID/notarized GitHub Release path. The packaged Electron app checks the public GitHub release feed and asks before download and restart; Studio refuses dirty or diverged source and never resets local work.
 
+The local installer packages the CLI into an npm archive before installing it under `~/.local`. This keeps the executable's canonical path inside Studio's trusted prefix instead of leaving a global symlink to a mutable source checkout. The installer verifies that containment before reporting success.
+
 ## Validation
 
 - `npm test`
